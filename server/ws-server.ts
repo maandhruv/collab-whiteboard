@@ -20,6 +20,15 @@ type Room = {
 };
 
 const rooms = new Map<string, Room>();
+// roomId -> access code
+const roomCodes = new Map<string, string>();
+
+function generateRoomId() {
+  return Math.random().toString(36).slice(2, 10);
+}
+function generateCode() {
+  return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
 
 function getRoom(name: string): Room {
   let room = rooms.get(name);
@@ -77,16 +86,88 @@ function getRoom(name: string): Room {
   return room;
 }
 
-const server = http.createServer((_req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('ok');
+const server = http.createServer((req, res) => {
+  // Simple CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
+  if (!req.url) { res.writeHead(404); res.end(); return; }
+  const url = new URL(req.url, `http://localhost:${PORT}`);
+
+  if (req.method === 'POST' && url.pathname === '/rooms') {
+    // Create new room with code
+    let body = '';
+    req.on('data', c => { body += c; });
+    req.on('end', () => {
+      try {
+        const { preferredId } = body ? JSON.parse(body) : {};
+        const id = preferredId && !rooms.has(preferredId) ? preferredId : generateRoomId();
+        const code = generateCode();
+        roomCodes.set(id, code);
+        // Pre-create room structure for quicker first connection
+        getRoom(id);
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ roomId: id, code }));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid json' }));
+      }
+    });
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/rooms/validate') {
+    const roomId = url.searchParams.get('roomId') || '';
+    const code = url.searchParams.get('code') || '';
+    const stored = roomCodes.get(roomId);
+    if (stored && stored === code) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    } else {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: 'invalid' }));
+    }
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok' }));
+    return;
+  }
+
+  res.writeHead(404, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: 'not found' }));
 });
 
 const wss = new WebSocketServer({ server });
 
 wss.on('connection', (ws, req) => {
-  const roomName = (req.url || '/').slice(1) || 'default';
-  const room = getRoom(roomName);
+  const rawUrl = req.url || '/';
+  // Expected path: /roomId or /roomId/code or /roomId?code=XXX
+  const tmp = new URL(rawUrl.startsWith('ws') ? rawUrl : `http://localhost:${PORT}${rawUrl}`);
+  const pathname = tmp.pathname.replace(/^\//, '');
+  let roomId = pathname;
+  let providedCode = tmp.searchParams.get('code') || '';
+  if (pathname.includes('/')) {
+    const parts = pathname.split('/');
+    roomId = parts[0];
+    if (!providedCode && parts[1]) providedCode = parts[1];
+  }
+  const requiredCode = roomCodes.get(roomId);
+  if (requiredCode) {
+    if (providedCode !== requiredCode) {
+      try { ws.close(1008, 'invalid code'); } catch {}
+      return;
+    }
+  } else {
+    // If room not registered yet, reject unless no code system used (enforce creation first)
+    try { ws.close(1008, 'room not found'); } catch {}
+    return;
+  }
+  const room = getRoom(roomId);
   room.conns.set(ws, new Set());
 
   // Send sync step1

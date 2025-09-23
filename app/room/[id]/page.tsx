@@ -1,8 +1,12 @@
+'use client';
 import dynamic from 'next/dynamic';
+import { useSearchParams } from 'next/navigation';
 
-// Render Whiteboard only on the client to avoid SSR hydration mismatches
+// Use lowercase path to match actual filename
 const Whiteboard = dynamic(() => import('@/components/Whiteboard'), { ssr: false });
 
 export default function RoomPage({ params }: { params: { id: string } }) {
-  return <Whiteboard roomId={params.id} />;
+  const search = useSearchParams();
+  const code = search.get('code') || undefined;
+  return <Whiteboard roomId={params.id} code={code} />;
 }
