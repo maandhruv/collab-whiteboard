@@ -290,8 +290,9 @@ function scheduleSnapshot(roomId: string, room: Room) {
   const t = setTimeout(async () => {
     snapshotTimers.delete(roomId);
     try {
-      const update = Y.encodeStateAsUpdate(room.doc);
-      await prisma.snapshot.create({ data: { whiteboard: { connect: { roomId } }, data: update } });
+  const raw = Y.encodeStateAsUpdate(room.doc);
+  const update = Buffer.from(raw);
+  await prisma.snapshot.create({ data: { whiteboard: { connect: { roomId } }, data: update } });
       // Limit snapshots to last 20
       const many = await prisma.snapshot.findMany({ where: { whiteboard: { roomId } }, orderBy: { createdAt: 'desc' }, skip: 20 });
       if (many.length) {
