@@ -1,12 +1,14 @@
-'use client';
-import dynamic from 'next/dynamic';
-import { useSearchParams } from 'next/navigation';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { redirect } from 'next/navigation';
+import Whiteboard from '@/components/Whiteboard';
 
-// Use lowercase path to match actual filename
-const Whiteboard = dynamic(() => import('@/components/Whiteboard'), { ssr: false });
-
-export default function RoomPage({ params }: { params: { id: string } }) {
-  const search = useSearchParams();
-  const code = search.get('code') || undefined;
-  return <Whiteboard roomId={params.id} code={code} />;
+export default async function RoomPage({ params, searchParams }: { params: { id: string }; searchParams: { code?: string } }) {
+  const session = await getServerSession(authOptions);
+  const roomId = params.id;
+  if (!session) {
+    const qp = searchParams.code ? `?code=${encodeURIComponent(searchParams.code)}` : '';
+    redirect(`/auth/signin?callbackUrl=${encodeURIComponent(`/room/${roomId}${qp}`)}`);
+  }
+  return <Whiteboard roomId={roomId} code={searchParams.code} userName={session!.user?.name || session!.user?.email || 'You'} userId={(session!.user as any).id} />;
 }

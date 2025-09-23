@@ -14,9 +14,13 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@next-auth/prisma-adapter": "^1.0.7",
+  "@prisma/client": "^5.22.0",
+    "bcryptjs": "^2.4.3",
     "express": "^5.1.0",
     "lib0": "^0.2.114",
     "next": "^14.2.13",
+    "next-auth": "^4.24.7",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "uuid": "^13.0.0",
@@ -26,13 +30,17 @@
     "yjs": "^13.6.27"
   },
   "devDependencies": {
+    "@types/dotenv": "^8.2.0",
+    "@types/bcryptjs": "^2.4.2",
     "@types/express": "^5.0.3",
     "@types/node": "^24.5.2",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "@types/ws": "^8.18.1",
+  "prisma": "^5.22.0",
     "tsx": "^4.20.5",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "dotenv": "^16.4.5"
   },
   "directories": {
     "lib": "lib"

@@ -59,7 +59,7 @@ const toolBtn: React.CSSProperties = {
   textTransform:'none'
 };
 
-export default function Whiteboard({ roomId, code }: { roomId: string; code?: string }) {
+export default function Whiteboard({ roomId, code, userName, userId }: { roomId: string; code?: string; userName?: string; userId?: string }) {
   // Provide fallback code from localStorage if query lost (e.g. after refresh)
   const effectiveCode = useMemo(() => {
     if (code) return code;
@@ -71,7 +71,16 @@ export default function Whiteboard({ roomId, code }: { roomId: string; code?: st
     }
   }, [effectiveCode, roomId]);
   const { doc, provider, awareness } = useMemo(() => connectY(roomId, effectiveCode), [roomId, effectiveCode]);
-  const user = useMemo(() => randomName(), []);
+  const user = useMemo(() => {
+    if (userName && userId) {
+      // Deterministic color from userId hash
+      let hash = 0;
+      for (let i = 0; i < userId.length; i++) hash = (hash * 31 + userId.charCodeAt(i)) >>> 0;
+      const hue = hash % 360;
+      return { name: userName, color: `hsl(${hue} 75% 55%)` };
+    }
+    return randomName();
+  }, [userName, userId]);
   const yPaths = useMemo(() => doc.getArray<Y.Map<any>>('paths'), [doc]);
   const yRects = useMemo(() => doc.getArray<Y.Map<any>>('rects'), [doc]);
   const yConnectors = useMemo(() => doc.getArray<Y.Map<any>>('connectors'), [doc]);

@@ -44,6 +44,11 @@ stylelint.cache
 *.local
 *.pid
 
+# SQLite dev database
+prisma/dev.db
+prisma/dev.db-journal
+prisma/*.db
+
 # Yjs persisted data (if added later)
 **/yjs-dump-*.bin
 
