@@ -16,11 +16,18 @@ export function buildAuthOptions(): NextAuthOptions {
         credentials: { email: { label: 'Email', type: 'email' }, password: { label: 'Password', type: 'password' } },
         async authorize(credentials) {
           if (!credentials?.email || !credentials.password) return null;
-          const user = await prisma.user.findUnique({ where: { email: credentials.email } });
-          if (!user || !user.passwordHash) return null;
-          const valid = await compare(credentials.password, user.passwordHash);
-          if (!valid) return null;
-          return { id: user.id, email: user.email, name: user.name } as any;
+          const email = credentials.email.trim().toLowerCase();
+          try {
+            const user = await prisma.user.findUnique({ where: { email } });
+            if (!user || !user.passwordHash) return null;
+            const valid = await compare(credentials.password, user.passwordHash);
+            if (!valid) return null;
+            return { id: user.id, email: user.email, name: user.name } as any;
+          } catch (err) {
+            console.error('[auth] credentials authorize error', err);
+            // Returning null (instead of throwing) avoids leaking internal errors to client; NextAuth treats as invalid credentials
+            return null;
+          }
         }
       }),
       ...(process.env.GITHUB_ID && process.env.GITHUB_SECRET ? [GitHubProvider({ clientId: process.env.GITHUB_ID!, clientSecret: process.env.GITHUB_SECRET! })] : []),
