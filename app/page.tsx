@@ -16,6 +16,22 @@ export default function Home() {
   const [code, setCode] = useState('');
   const [boards, setBoards] = useState<any[] | null>(null);
   const [boardsError, setBoardsError] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
+
+  async function saveTitle(roomId: string) {
+    const newTitle = editingTitle.trim() || 'Untitled Board';
+    try {
+      const res = await fetch(`/api/whiteboards/${roomId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title: newTitle }) });
+      if (!res.ok) throw new Error('rename failed');
+      const d = await res.json();
+      setBoards(b => b ? b.map(x => x.roomId === roomId ? { ...x, title: d.board.title, updatedAt: d.board.updatedAt } : x) : b);
+      setEditingId(null);
+      setEditingTitle('');
+    } catch (e:any) {
+      alert(e.message || 'Rename failed');
+    }
+  }
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -97,12 +113,26 @@ export default function Home() {
             {boards && boards.length === 0 && <div style={{fontSize:13,opacity:.6}}>No boards yet. Create one above.</div>}
             {boards && boards.length > 0 && (
               <div style={{display:'grid',gap:12,gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))'}}>
-                {boards.map(b => (
-                  <button key={b.id} onClick={()=>router.push(`/room/${b.roomId}?code=${localStorage.getItem('wb-room:'+b.roomId) || ''}`)} style={{textAlign:'left',background:'#1f2937',border:'1px solid #374151',borderRadius:8,padding:12,color:'#fff',cursor:'pointer'}}>
-                    <div style={{fontWeight:600,fontSize:14,marginBottom:4,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{b.title || b.roomId}</div>
+                {boards.map(b => {
+                  const stored = typeof window !== 'undefined' ? localStorage.getItem('wb-room:'+b.roomId) : '';
+                  const codeToUse = stored || b.accessCode || '';
+                  return (
+                  <div key={b.id} style={{background:'#1f2937',border:'1px solid #374151',borderRadius:8,padding:12,color:'#fff',display:'flex',flexDirection:'column',gap:4}}>
+                    {editingId === b.roomId ? (
+                      <form onSubmit={e=>{e.preventDefault(); saveTitle(b.roomId);}} style={{display:'flex',gap:4}}>
+                        <input autoFocus value={editingTitle} onChange={e=>setEditingTitle(e.target.value)} onBlur={()=>saveTitle(b.roomId)} style={{flex:1,background:'#111827',border:'1px solid #374151',borderRadius:4,color:'#fff',fontSize:13,padding:'4px 6px'}} />
+                      </form>
+                    ) : (
+                      <div style={{display:'flex',alignItems:'center',gap:6}}>
+                        <button onClick={()=>router.push(`/room/${b.roomId}?code=${codeToUse}`)} style={{flex:1,textAlign:'left',background:'transparent',border:'none',color:'#fff',cursor:'pointer',padding:0,margin:0,overflow:'hidden'}}>
+                          <div style={{fontWeight:600,fontSize:14,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{b.title || 'Untitled Board'}</div>
+                        </button>
+                        <button title="Rename" onClick={()=>{setEditingId(b.roomId); setEditingTitle(b.title || '');}} style={{background:'#374151',border:'none',color:'#fff',cursor:'pointer',borderRadius:4,padding:'2px 6px',fontSize:11}}>Edit</button>
+                      </div>
+                    )}
                     <div style={{fontSize:11,opacity:.6}}>Updated {new Date(b.updatedAt).toLocaleString()}</div>
-                  </button>
-                ))}
+                  </div>
+                );})}
               </div>
             )}
           </div>

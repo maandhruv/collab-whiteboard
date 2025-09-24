@@ -11,7 +11,7 @@ const parent = path.dirname(__dirname);
 if (path.basename(__dirname) === 'server' && process.cwd() !== parent) {
   try { process.chdir(parent); } catch {}
 }
-import { prisma } from '../lib/prisma.js';
+import { prisma } from '../lib/prisma';
 import { WebSocketServer, WebSocket } from 'ws';
 import * as Y from 'yjs';
 import * as sync from 'y-protocols/sync';
@@ -218,26 +218,23 @@ wss.on('connection', (ws, req) => {
     return;
   }
   const room = getRoom(roomId);
+  const wasEmpty = room.conns.size === 0; // capture before adding this socket
   room.conns.set(ws, new Set());
 
-  // Load latest snapshot synchronously-before-sync if first socket for this room
-  if (!room.conns.size) {
+  if (wasEmpty) {
     prisma.snapshot.findFirst({ where: { whiteboard: { roomId } }, orderBy: { createdAt: 'desc' } })
       .then((snap: any) => {
         if (snap) {
           try { Y.applyUpdate(room.doc, new Uint8Array(snap.data as any)); } catch (e) { console.error('Apply snapshot failed', e); }
         }
-      }).finally(() => {
-        // After potential load, send sync step1
+      })
+      .finally(() => {
         const enc = encoding.createEncoder();
         encoding.writeVarUint(enc, 0);
         sync.writeSyncStep1(enc, room.doc);
         try { ws.send(encoding.toUint8Array(enc)); } catch {}
       });
-  }
-
-  // If snapshot load async path executed we may have already sent sync; guard duplicate
-  if (room.conns.size > 1) {
+  } else {
     const enc = encoding.createEncoder();
     encoding.writeVarUint(enc, 0);
     sync.writeSyncStep1(enc, room.doc);
