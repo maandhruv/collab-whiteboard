@@ -24,7 +24,10 @@ import {
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 
-const PORT = Number(process.env.PORT) || 1234;
+// Resolve dynamic PORT (Railway/other PaaS). If unset, fall back to 1234 for local dev.
+const RAW_PORT = process.env.PORT;
+const PORT = RAW_PORT ? Number(RAW_PORT) : 1234;
+const HOST = '0.0.0.0';
 // Debug env for database
 // eslint-disable-next-line no-console
 console.log('[ws-server] DATABASE_URL =', process.env.DATABASE_URL);
@@ -102,7 +105,12 @@ function getRoom(name: string): Room {
   return room;
 }
 
+let ready = false;
 const server = http.createServer((req, res) => {
+  // Basic request log (lightweight)
+  if (req.url !== '/health') {
+    console.log('[http]', req.method, req.url);
+  }
   // Simple CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -163,7 +171,7 @@ const server = http.createServer((req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok' }));
+    res.end(JSON.stringify({ status: 'ok', ready }));
     return;
   }
 
@@ -317,6 +325,20 @@ setInterval(() => {
   }
 }, 2000);
 
-server.listen(PORT, () => {
-  console.log('Custom Yjs WebSocket server listening on :' + PORT);
+server.listen(PORT, HOST, () => {
+  console.log(`[ws-server] Listening on ${HOST}:${PORT} (env PORT=${RAW_PORT || 'unset'})`);
+  setTimeout(() => { ready = true; }, 150); // small delay to allow initial warm tasks
+});
+
+process.on('unhandledRejection', (r) => {
+  console.error('[unhandledRejection]', r);
+});
+process.on('uncaughtException', (e) => {
+  console.error('[uncaughtException]', e);
+});
+['SIGTERM','SIGINT'].forEach(sig => {
+  process.on(sig as NodeJS.Signals, () => {
+    console.log(`[ws-server] Received ${sig}, shutting down.`);
+    try { server.close(() => process.exit(0)); } catch { process.exit(0); }
+  });
 });
